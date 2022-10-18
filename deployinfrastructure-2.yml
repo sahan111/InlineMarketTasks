@@ -1,0 +1,115 @@
+trigger:
+- master
+
+pool:
+  vmImage: 'windows-latest'
+
+stages:
+- stage: "BuildStage"
+  jobs:
+  - job: "BuildJob"
+    pool:
+      vmImage: 'windows-latest'
+
+    steps:
+    - task: CopyFiles@2
+      inputs:
+        SourceFolder: 'ARMTemplate/'
+        Contents: '**'
+        TargetFolder: '$(build.artifactStagingDirectory)'
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
+
+
+- stage: "Staging"
+  dependsOn: "BuildStage"
+  jobs:
+  - job:
+    pool:
+      vmimage: 'windows-latest' 
+      variables: $(AppServiceName)
+    steps:
+    - task: DownloadBuildArtifacts@1
+      inputs:
+        buildType: 'current'
+        downloadType: 'single'
+        artifactName: 'drop'
+        downloadPath: '$(System.DefaultWorkingDirectory)'
+    - task: replacetokens@5
+      inputs:
+        rootDirectory: '$(System.DefaultWorkingDirectory)'
+        targetFiles: 'parameters.json'
+        encoding: 'auto'
+        tokenPattern: 'custom'
+        tokenPrefix: '#'
+        tokenSuffix: '#'
+        writeBOM: true
+        actionOnMissing: 'warn'
+        keepToken: false
+        actionOnNoFiles: 'continue'
+        enableTransforms: false
+        enableRecursion: false
+        useLegacyPattern: false
+        enableTelemetry: true
+
+    - task: AzureResourceManagerTemplateDeployment@3
+      inputs:
+        deploymentScope: 'Resource Group'
+        azureResourceManagerConnection: 'Inline-Assignment-Subscription'
+        subscriptionId: '2d5ba6ed-2d9b-489a-98f9-f7fa6b09fcfe'
+        action: 'Create Or Update Resource Group'
+        resourceGroupName: 'Inline-Assignment-RG'
+        location: 'East US'
+        templateLocation: 'Linked artifact'
+        csmFile: '$(System.DefaultWorkingDirectory)/_DeployInfrastructure/drop/template.json'
+        csmParametersFile: '$(System.DefaultWorkingDirectory)/_DeployInfrastructure/drop/parameters.json'
+        deploymentMode: 'Incremental'
+        deploymentName: 'DeployinfrastructreInline'
+
+- stage: "Production"
+  dependsOn: "Staging"
+  jobs:
+  - job:
+    pool:
+      vmimage: 'windows-latest' 
+    steps:
+    - task: DownloadBuildArtifacts@1
+      inputs:
+        buildType: 'current'
+        downloadType: 'single'
+        artifactName: 'drop'
+        downloadPath: '$(System.DefaultWorkingDirectory)'
+    - task: replacetokens@5
+      inputs:
+        rootDirectory: '$(System.DefaultWorkingDirectory)'
+        targetFiles: 'parameters.json'
+        encoding: 'auto'
+        tokenPattern: 'custom'
+        tokenPrefix: '#'
+        tokenSuffix: '#'
+        writeBOM: true
+        actionOnMissing: 'warn'
+        keepToken: false
+        actionOnNoFiles: 'continue'
+        enableTransforms: false
+        enableRecursion: false
+        useLegacyPattern: false
+        enableTelemetry: true
+
+    - task: AzureResourceManagerTemplateDeployment@3
+      inputs:
+        deploymentScope: 'Resource Group'
+        azureResourceManagerConnection: 'Inline-Assignment-Subscription'
+        subscriptionId: '2d5ba6ed-2d9b-489a-98f9-f7fa6b09fcfe'
+        action: 'Create Or Update Resource Group'
+        resourceGroupName: 'Inline-Assignment-RG'
+        location: 'East US'
+        templateLocation: 'Linked artifact'
+        csmFile: '$(System.DefaultWorkingDirectory)/_DeployInfrastructure/drop/template.json'
+        csmParametersFile: '$(System.DefaultWorkingDirectory)/_DeployInfrastructure/drop/parameters.json'
+        deploymentMode: 'Incremental'
+        deploymentName: 'DeployinfrastructreInline'
